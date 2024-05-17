@@ -1,60 +1,52 @@
-import { useState } from "react";
-import { Container, VStack, Input, Button, Text, Box } from "@chakra-ui/react";
+import React, { useState, useEffect } from "react";
+import { Container, Text, VStack, Input, Button, Box, List, ListItem } from "@chakra-ui/react";
+import WebSocketInstance from "../utils/websocket";
 
 const Index = () => {
+  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
 
-  const handleSend = async () => {
-    if (input.trim() === "") return;
+  useEffect(() => {
+    WebSocketInstance.connect();
+    WebSocketInstance.addCallbacks(setMessages, addMessage);
 
-    const userMessage = { sender: "user", text: input };
-    setMessages([...messages, userMessage]);
-    setInput("");
+    return () => {
+      WebSocketInstance.socketRef.close();
+    };
+  }, []);
 
-    try {
-      const response = await fetch("https://api.openai.com/v1/engines/davinci-codex/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer YOUR_OPENAI_API_KEY`,
-        },
-        body: JSON.stringify({
-          prompt: input,
-          max_tokens: 150,
-          n: 1,
-          stop: null,
-          temperature: 0.9,
-        }),
-      });
+  const addMessage = (message) => {
+    setMessages((prevMessages) => [...prevMessages, message]);
+  };
 
-      const data = await response.json();
-      const botMessage = { sender: "bot", text: data.choices[0].text.trim() };
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
-    } catch (error) {
-      console.error("Error fetching response:", error);
-      const errorMessage = { sender: "bot", text: "Sorry, I couldn't process your request." };
-      setMessages((prevMessages) => [...prevMessages, errorMessage]);
-    }
+  const sendMessage = () => {
+    const messageObject = { from: "user", content: message };
+    WebSocketInstance.newChatMessage(messageObject);
+    setMessage("");
   };
 
   return (
     <Container centerContent maxW="container.md" height="100vh" display="flex" flexDirection="column" justifyContent="center" alignItems="center">
       <VStack spacing={4} width="100%">
-        <Box width="100%" height="60vh" overflowY="auto" border="1px solid #ccc" borderRadius="md" p={4}>
-          {messages.map((msg, index) => (
-            <Text key={index} alignSelf={msg.sender === "user" ? "flex-end" : "flex-start"} bg={msg.sender === "user" ? "blue.100" : "gray.100"} p={2} borderRadius="md" mb={2}>
-              {msg.text}
-            </Text>
-          ))}
+        <Text fontSize="2xl">Real-Time Messaging</Text>
+        <Box width="100%" borderWidth="1px" borderRadius="lg" overflow="hidden" p={4}>
+          <List spacing={3}>
+            {messages.map((msg, index) => (
+              <ListItem key={index} p={2} borderWidth="1px" borderRadius="md">
+                {msg.from}: {msg.content}
+              </ListItem>
+            ))}
+          </List>
         </Box>
         <Input
-          placeholder="Type your message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === "Enter" && handleSend()}
+          placeholder="Type a message..."
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={(e) => (e.key === "Enter" ? sendMessage() : null)}
         />
-        <Button onClick={handleSend} colorScheme="blue">Send</Button>
+        <Button onClick={sendMessage} colorScheme="blue">
+          Send
+        </Button>
       </VStack>
     </Container>
   );
